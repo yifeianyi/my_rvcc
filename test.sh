@@ -31,5 +31,6 @@ assert(){
 # [1] 返回指定数值
 assert 0 0
 assert 42 42
-assert 2 "12-10"
+assert 41 ' 12 + 34 - 5 '
+assert 2 '12-10'
 echo OK
