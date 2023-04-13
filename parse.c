@@ -7,7 +7,8 @@
 // exprStmt = expr ";"
 
 // [1]-[8]
-// expr = equality
+// expr = assign 
+// assign = equality ("=" assign)?
 // equality = relational ("==" relational | "!=" relational)*
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 // add = mul ("+" mul | "-" mul)*
@@ -16,6 +17,8 @@
 // primary = "(" expr ")" | num
 
 
+// [10]
+static Node *assign(Token **Rest, Token *Tok);
 // [9]
 static Node *exprStmt(Token **Rest, Token *Tok);
 // [1]-[8]
@@ -52,6 +55,12 @@ static Node *newNum(int Val) {
   return Nd;
 }
 
+static Node *newVarNode(char Name){
+    Node *Nd = newNode(ND_VAR);
+    Nd->Name = Name;
+    return Nd;
+}
+
 // 解析语句
 static Node *stmt(Token **Rest, Token *Tok){ return exprStmt(Rest, Tok);}
 static Node *exprStmt(Token **Rest, Token *Tok){
@@ -59,7 +68,19 @@ static Node *exprStmt(Token **Rest, Token *Tok){
     *Rest = skip(Tok, ";");
     return Nd;
 }
-static Node *expr(Token **Rest, Token *Tok) { return equality(Rest, Tok); }
+static Node *expr(Token **Rest, Token *Tok) { return assign(Rest, Tok); }
+
+static Node *assign(Token **Rest, Token *Tok){
+    Node *Nd = equality(&Tok, Tok);
+
+    // 可能存在递归赋值，如a=b=1
+    // ("=" assign)?
+    if(equal(Tok, "=")){
+        Nd = newBinary(ND_ASSIGN, Nd, assign(&Tok, Tok->Next));
+    }
+    *Rest = Tok;
+    return Nd;
+}
 static Node *equality(Token **Rest, Token *Tok) {
   Node *Nd = relational(&Tok, Tok);
   while (true) {
@@ -149,21 +170,28 @@ static Node *unary(Token **Rest, Token *Tok) {
 }
 
 static Node *primary(Token **Rest, Token *Tok) {
-  if (equal(Tok, "(")) {
-    Node *Nd = expr(&Tok, Tok->Next);
-    *Rest = skip(Tok, ")");
-    return Nd;
-  }
+    if (equal(Tok, "(")) {
+        Node *Nd = expr(&Tok, Tok->Next);
+        *Rest = skip(Tok, ")");
+        return Nd;
+    }
 
-  // num
-  if (Tok->Kind == TK_NUM) {
-    Node *Nd = newNum(Tok->Val);
-    *Rest = Tok->Next;
-    return Nd;
-  }
+    if(Tok->Kind == TK_IDENT){
+      Node *Nd = newVarNode(*Tok->Loc);
+      *Rest = Tok->Next;
+      return Nd;
+    }
 
-  errorTok(Tok, "expected an expression");
-  return NULL;
+    // num
+    if (Tok->Kind == TK_NUM) {
+        Node *Nd = newNum(Tok->Val);
+        *Rest = Tok->Next;
+        return Nd;
+    }
+
+
+    errorTok(Tok, "expected an expression");
+    return NULL;
 }
 
 Node *parse(Token *Tok){

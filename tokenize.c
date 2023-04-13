@@ -93,6 +93,15 @@ Token *tokenize(char *P){
             continue;
         }
 
+        // sign 
+        if('a' <= *P && *P <= 'z'){
+            Cur->Next = newToken(TK_IDENT, P, P + 1);
+            Cur = Cur->Next;
+            ++P;
+            continue;
+        }
+
+        // op
         int PunctLen = readPunct(P);
         if(PunctLen){
             Cur->Next = newToken(TK_PUNCT, P, P + PunctLen);
