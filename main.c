@@ -8,6 +8,5 @@ int main(int Argc , char **Argv){
     Token *Tok = tokenize(Argv[1]);
     Node *Nd = parse(Tok);
     codegen(Nd);
-
     return 0;
 }

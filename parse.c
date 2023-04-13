@@ -1,5 +1,12 @@
 #include "rvcc.h"
 
+
+// [9]
+// program = stmt*
+// stmt = exprStmt
+// exprStmt = expr ";"
+
+// [1]-[8]
 // expr = equality
 // equality = relational ("==" relational | "!=" relational)*
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
@@ -7,6 +14,11 @@
 // mul = unary ("*" unary | "/" unary)*
 // unary = ("+" | "-") unary | primary
 // primary = "(" expr ")" | num
+
+
+// [9]
+static Node *exprStmt(Token **Rest, Token *Tok);
+// [1]-[8]
 static Node *expr(Token **Rest, Token *Tok);
 static Node *equality(Token **Rest, Token *Tok);
 static Node *relational(Token **Rest, Token *Tok);
@@ -27,7 +39,6 @@ static Node *newUnary(NodeKind Kind, Node *Expr) {
   return Nd;
 }
 
-
 static Node *newBinary(NodeKind Kind, Node *LHS, Node *RHS) {
   Node *Nd = newNode(Kind);
   Nd->LHS = LHS;
@@ -41,7 +52,13 @@ static Node *newNum(int Val) {
   return Nd;
 }
 
-
+// 解析语句
+static Node *stmt(Token **Rest, Token *Tok){ return exprStmt(Rest, Tok);}
+static Node *exprStmt(Token **Rest, Token *Tok){
+    Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok));
+    *Rest = skip(Tok, ";");
+    return Nd;
+}
 static Node *expr(Token **Rest, Token *Tok) { return equality(Rest, Tok); }
 static Node *equality(Token **Rest, Token *Tok) {
   Node *Nd = relational(&Tok, Tok);
@@ -150,8 +167,13 @@ static Node *primary(Token **Rest, Token *Tok) {
 }
 
 Node *parse(Token *Tok){
-    Node *Nd = expr(&Tok, Tok);
-    if (Tok->Kind != TK_EOF) 
-        errorTok(Tok, "extra token");
-    return Nd;
+    //Node *Nd = expr(&Tok, Tok);
+
+    Node Head = {};
+    Node *Cur = &Head;
+    while(Tok->Kind != TK_EOF){
+        Cur->Next = stmt(&Tok, Tok);
+        Cur = Cur->Next;
+    }
+    return Head.Next;
 }

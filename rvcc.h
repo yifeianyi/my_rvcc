@@ -29,10 +29,8 @@ struct Token{
 
 
 void error(char *Fmt,...);
-//void verrorAt(char *Loc, char *Fmt, va_list VA);
 void errorAt(char *Loc, char *Fmt, ...);
 void errorTok(Token *Tok, char *Fmt, ...);
-
 
 // 判断Token与Str的关系
 bool equal(Token *Tok, char *Str);
@@ -47,15 +45,16 @@ Token *tokenize(char *Input);
 //
 // AST的节点种类
 typedef enum {
-  ND_ADD, // +
-  ND_SUB, // -
-  ND_MUL, // *
-  ND_DIV, // /
-  ND_NEG, // 负号-
-  ND_EQ,  // ==
-  ND_NE,  // !=
-  ND_LT,  // <
-  ND_LE,  // <=
+  ND_ADD,       // +
+  ND_SUB,       // -
+  ND_MUL,       // *
+  ND_DIV,       // /
+  ND_NEG,       // 负号-
+  ND_EQ,        // ==
+  ND_NE,        // !=
+  ND_LT,        // <
+  ND_LE,        // <=
+  ND_EXPR_STMT, // Expr
   ND_NUM, 
 } NodeKind;
 
@@ -63,6 +62,7 @@ typedef enum {
 typedef struct Node Node;
 struct Node {
   NodeKind Kind; 
+  Node *Next;
   Node *LHS;     
   Node *RHS;     
   int Val;       
