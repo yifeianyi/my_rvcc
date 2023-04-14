@@ -72,6 +72,15 @@ static int readPunct(char *Ptr) {
   return ispunct(*Ptr) ? 1 : 0;
 }
 
+// 判断标记符的首字母规则
+// [a-zA-Z_]
+static bool isIdent1(char C){
+    return ('a' <= C && C <= 'z') || ('A' <= C && C <= 'Z') || C == '_';
+}
+
+static bool isIdent2(char C){
+    return isIdent1(C) || ( '0' <= C && C <= '9');
+}
 
 Token *tokenize(char *P){
     CurrentInput = P;
@@ -93,11 +102,23 @@ Token *tokenize(char *P){
             continue;
         }
 
-        // sign 
-        if('a' <= *P && *P <= 'z'){
-            Cur->Next = newToken(TK_IDENT, P, P + 1);
+        // // [10]sign 
+        // if('a' <= *P && *P <= 'z'){
+        //     Cur->Next = newToken(TK_IDENT, P, P + 1);
+        //     Cur = Cur->Next;
+        //     ++P;
+        //     continue;
+        // }
+
+        //[11] sign
+        if(isIdent1(*P)){
+            char *Start = P;
+            do{
+                ++P;
+            }while(isIdent2(*P));
+
+            Cur->Next = newToken(TK_IDENT, Start, P);
             Cur = Cur->Next;
-            ++P;
             continue;
         }
 

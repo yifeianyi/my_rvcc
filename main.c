@@ -6,7 +6,7 @@ int main(int Argc , char **Argv){
     }
     //[3]:解析Argv[1]
     Token *Tok = tokenize(Argv[1]);
-    Node *Nd = parse(Tok);
-    codegen(Nd);
+    Function *Prog = parse(Tok);
+    codegen(Prog);
     return 0;
 }

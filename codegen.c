@@ -16,11 +16,15 @@ static void pop(char *Reg) {
 
 static void genAddr(Node *Nd){
     if(Nd->Kind == ND_VAR){
-        int Offset = (Nd->Name - 'a' + 1);
-        printf("    addi a0, fp, %d\n", -Offset);
+        printf("    addi a0, fp, %d\n", Nd->Var->Offset);
         return ;
     }
     error("not an lvalue");
+}
+
+// 对齐到Align的整数倍
+static int alignTo(int N, int Align){
+  return (N + Align - 1) / Align *Align;
 }
 
 static void genExpr(Node *Nd) {
@@ -95,19 +99,26 @@ static void genStmt(Node *Nd){
     error("invalid statement");
 }
 
-void codegen(Node* Nd){
+static void assignLVarOffsets(Function *Prog){
+  int Offset = 0;
+  for(Obj *Var = Prog->Locals; Var; Var = Var->Next){
+    Offset += 8;
+    Var->Offset = -Offset;
+  }
+  Prog->StackSize = alignTo(Offset, 16);
+}
+
+void codegen(Function *Prog){
+  assignLVarOffsets(Prog);
     printf("    .globl main\n");
     printf("main:\n");
 
-    // 栈布局
+  // 栈布局
   //-------------------------------// sp
-  //              fp                  fp = sp-8
-  //-------------------------------// fp
-  //              'a'                 fp-8
-  //              'b'                 fp-16
-  //              ...
-  //              'z'                 fp-208
-  //-------------------------------// sp=sp-8-208
+  //              fp
+  //-------------------------------// fp = sp-8
+  //             变量
+  //-------------------------------// sp = sp-8-StackSize
   //           表达式计算
   //-------------------------------//
     
@@ -117,9 +128,9 @@ void codegen(Node* Nd){
     printf("    addi sp, sp, -8\n");
     printf("    sd fp, 0(sp)\n");
     printf("    mv fp, sp\n");  // 将sp写入fp
-    printf("    addi sp, sp, -208\n");// 26个字母*8字节=208字节，栈腾出208字节的空间
+    printf("    addi sp, sp, -%d\n", Prog->StackSize);// 26个字母*8字节=208字节，栈腾出208字节的空间
 
-    for(Node *N = Nd; N; N=N->Next){
+    for(Node *N = Prog->Body; N; N=N->Next){
         genStmt(N);
         assert(Depth == 0);
     }

@@ -1,5 +1,7 @@
 #include "rvcc.h"
 
+// 在解析时，全部的变量实例都被累加到这个列表里。
+Obj *Locals;
 
 // [9]
 // program = stmt*
@@ -30,6 +32,16 @@ static Node *mul(Token **Rest, Token *Tok);
 static Node *unary(Token **Rest, Token *Tok);
 static Node *primary(Token **Rest, Token *Tok);
 
+
+
+static Obj *findVar(Token *Tok){
+  for(Obj *Var = Locals; Var; Var = Var->Next){
+    if(strlen(Var->Name) == Tok->Len &&
+      !strncmp(Tok->Loc, Var->Name, Tok->Len)) return Var;
+  }
+  return NULL;
+}
+
 static Node *newNode(NodeKind Kind) {
   Node *Nd = calloc(1, sizeof(Node));
   Nd->Kind = Kind;
@@ -55,11 +67,21 @@ static Node *newNum(int Val) {
   return Nd;
 }
 
-static Node *newVarNode(char Name){
+static Node *newVarNode(Obj *Var){
     Node *Nd = newNode(ND_VAR);
-    Nd->Name = Name;
+    Nd->Var = Var;
     return Nd;
 }
+
+//Create a new Var in list
+static Obj *newLVar(char *Name){
+  Obj *Var = calloc(1, sizeof(Obj));
+  Var->Name = Name;
+  Var->Next = Locals;
+  Locals = Var;
+  return Var;
+}
+
 
 // 解析语句
 static Node *stmt(Token **Rest, Token *Tok){ return exprStmt(Rest, Tok);}
@@ -176,10 +198,15 @@ static Node *primary(Token **Rest, Token *Tok) {
         return Nd;
     }
 
+    // ident
     if(Tok->Kind == TK_IDENT){
-      Node *Nd = newVarNode(*Tok->Loc);
+      Obj *Var = findVar(Tok);
+
+      if(!Var)
+        Var = newLVar(strndup(Tok->Loc, Tok->Len));
+      
       *Rest = Tok->Next;
-      return Nd;
+      return newVarNode(Var);
     }
 
     // num
@@ -194,7 +221,7 @@ static Node *primary(Token **Rest, Token *Tok) {
     return NULL;
 }
 
-Node *parse(Token *Tok){
+Function *parse(Token *Tok){
     //Node *Nd = expr(&Tok, Tok);
 
     Node Head = {};
@@ -203,5 +230,10 @@ Node *parse(Token *Tok){
         Cur->Next = stmt(&Tok, Tok);
         Cur = Cur->Next;
     }
-    return Head.Next;
+
+    // 函数体存储语句的AST，Locals存储变量
+    Function *Prog = calloc(1,sizeof(Function));
+    Prog->Body = Head.Next;
+    Prog->Locals = Locals;
+    return Prog;
 }

@@ -1,3 +1,7 @@
+// 使用POSIX.1标准
+// 使用了strndup函数
+#define _POSIX_C_SOURCE 200809L
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -44,6 +48,26 @@ Token *tokenize(char *Input);
 //
 // 生成AST（抽象语法树），语法解析
 //
+
+typedef struct Node Node;
+
+// Local var
+typedef struct Obj Obj;
+struct Obj{
+  Obj *Next;
+  char *Name;
+  int Offset;
+};
+
+typedef struct Function Function;
+struct Function{
+  Node *Body;
+  Obj *Locals;
+  int StackSize;
+};
+
+
+
 // AST的节点种类
 typedef enum {
   ND_ADD,       // +
@@ -55,30 +79,30 @@ typedef enum {
   ND_NE,        // !=
   ND_LT,        // <
   ND_LE,        // <=
+  ND_ASSIGN,    // 赋值
   ND_EXPR_STMT, // Expr
   ND_VAR,       // var
-  ND_ASSIGN,    // 赋值
   ND_NUM, 
 } NodeKind;
 
 // AST中二叉树节点
-typedef struct Node Node;
+
 struct Node {
   NodeKind Kind; 
   Node *Next;
   Node *LHS;     
-  Node *RHS;   
-  char Name;  
+  Node *RHS;  
+  Obj *Var; 
   int Val;       
 };
-Node *parse(Token *Tok);
+Function *parse(Token *Tok);
 
 //
 // 语义分析与代码生成
 //
 
 // 代码生成入口函数
-void codegen(Node *Nd);
+void codegen(Function *Prog);
 
 
 
