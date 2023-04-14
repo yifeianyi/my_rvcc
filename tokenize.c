@@ -72,6 +72,13 @@ static int readPunct(char *Ptr) {
   return ispunct(*Ptr) ? 1 : 0;
 }
 
+static void convertKeywords(Token *Tok){
+    for(Token *T = Tok; T->Kind != TK_EOF; T = T->Next){
+        if(equal(T, "return"))
+            T->Kind = TK_KEYWORD;
+    }
+}
+
 // 判断标记符的首字母规则
 // [a-zA-Z_]
 static bool isIdent1(char C){
@@ -102,21 +109,12 @@ Token *tokenize(char *P){
             continue;
         }
 
-        // // [10]sign 
-        // if('a' <= *P && *P <= 'z'){
-        //     Cur->Next = newToken(TK_IDENT, P, P + 1);
-        //     Cur = Cur->Next;
-        //     ++P;
-        //     continue;
-        // }
-
         //[11] sign
         if(isIdent1(*P)){
             char *Start = P;
             do{
                 ++P;
             }while(isIdent2(*P));
-
             Cur->Next = newToken(TK_IDENT, Start, P);
             Cur = Cur->Next;
             continue;
@@ -136,5 +134,7 @@ Token *tokenize(char *P){
     }
 
     Cur->Next = newToken(TK_EOF, P, P);
+    // 将所有关键字的终结符，都标记为KEYWORD
+    convertKeywords(Head.Next);
     return Head.Next;
 }

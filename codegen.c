@@ -92,9 +92,22 @@ static void genExpr(Node *Nd) {
 }
 
 static void genStmt(Node *Nd){
-    if(Nd->Kind == ND_EXPR_STMT){
-        genExpr(Nd->LHS);
-        return ;
+    switch (Nd->Kind)
+    {
+    case ND_BLOCK:
+      for(Node *N = Nd->Body; N; N = N->Next)
+        genStmt(N);
+      return ;
+    case ND_RETURN:
+      genExpr(Nd->LHS);
+      printf("  j .L.return\n");
+      return ;
+    case ND_EXPR_STMT:
+      genExpr(Nd->LHS);
+      return;
+    
+    default:
+      break;
     }
     error("invalid statement");
 }
@@ -137,6 +150,7 @@ void codegen(Function *Prog){
 
     // Epilogue，后语
     // 将fp的值改写回sp
+    printf(".L.return: \n");
     printf("  mv sp, fp\n");
     // 将最早fp保存的值弹栈，恢复fp。
     printf("  ld fp, 0(sp)\n");

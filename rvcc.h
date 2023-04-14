@@ -18,6 +18,7 @@
 typedef enum{
     TK_IDENT,   // sign: var_name , func_name
     TK_PUNCT,   //opcode : + -
+    TK_KEYWORD,
     TK_NUM,     // number
     TK_EOF,     // file ending
 }TokenKind;
@@ -80,6 +81,8 @@ typedef enum {
   ND_LT,        // <
   ND_LE,        // <=
   ND_ASSIGN,    // 赋值
+  ND_RETURN,
+  ND_BLOCK,     // { ... }, code block
   ND_EXPR_STMT, // Expr
   ND_VAR,       // var
   ND_NUM, 
@@ -91,7 +94,9 @@ struct Node {
   NodeKind Kind; 
   Node *Next;
   Node *LHS;     
-  Node *RHS;  
+  Node *RHS;
+  // code block
+  Node *Body;  
   Obj *Var; 
   int Val;       
 };

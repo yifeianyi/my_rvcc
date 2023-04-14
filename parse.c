@@ -3,12 +3,10 @@
 // 在解析时，全部的变量实例都被累加到这个列表里。
 Obj *Locals;
 
-// [9]
-// program = stmt*
-// stmt = exprStmt
+// program = "{" compoundStmt   //to do
+// compoundStmt = stmt* "}"     //to do
+// stmt = "return" expr ";" | "{" compoundStmt | exprStmt //to do
 // exprStmt = expr ";"
-
-// [1]-[8]
 // expr = assign 
 // assign = equality ("=" assign)?
 // equality = relational ("==" relational | "!=" relational)*
@@ -18,13 +16,10 @@ Obj *Locals;
 // unary = ("+" | "-") unary | primary
 // primary = "(" expr ")" | num
 
-
-// [10]
-static Node *assign(Token **Rest, Token *Tok);
-// [9]
+static Node *compoundStmt(Token **Rest, Token *Tok);
 static Node *exprStmt(Token **Rest, Token *Tok);
-// [1]-[8]
 static Node *expr(Token **Rest, Token *Tok);
+static Node *assign(Token **Rest, Token *Tok);
 static Node *equality(Token **Rest, Token *Tok);
 static Node *relational(Token **Rest, Token *Tok);
 static Node *add(Token **Rest, Token *Tok);
@@ -84,8 +79,39 @@ static Obj *newLVar(char *Name){
 
 
 // 解析语句
-static Node *stmt(Token **Rest, Token *Tok){ return exprStmt(Rest, Tok);}
+static Node *stmt(Token **Rest, Token *Tok){ 
+  if(equal(Tok, "return")){
+    Node *Nd = newUnary(ND_RETURN, expr(&Tok, Tok->Next))  ;
+    *Rest = skip(Tok, ";");
+    return Nd;
+  }
+
+  if(equal(Tok, "{"))
+    return compoundStmt(Rest, Tok->Next);
+
+  return exprStmt(Rest, Tok);
+}
+
+static Node *compoundStmt(Token **Rest, Token *Tok){
+  Node Head = {};
+  Node *Cur = &Head;
+  while(!equal(Tok, "}")){
+    Cur->Next = stmt(&Tok, Tok);
+    Cur = Cur->Next;
+  }
+
+  Node *Nd = newNode(ND_BLOCK);
+  Nd->Body = Head.Next;
+  *Rest = Tok->Next;
+  return Nd;
+}
+
 static Node *exprStmt(Token **Rest, Token *Tok){
+    if(equal(Tok, ";")){
+      *Rest = Tok->Next;
+      return newNode(ND_BLOCK);
+    }
+
     Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok));
     *Rest = skip(Tok, ";");
     return Nd;
@@ -222,18 +248,18 @@ static Node *primary(Token **Rest, Token *Tok) {
 }
 
 Function *parse(Token *Tok){
-    //Node *Nd = expr(&Tok, Tok);
+    // Node Head = {};
+    // Node *Cur = &Head;
+    // while(Tok->Kind != TK_EOF){
+    //     Cur->Next = stmt(&Tok, Tok);
+    //     Cur = Cur->Next;
+    // }
 
-    Node Head = {};
-    Node *Cur = &Head;
-    while(Tok->Kind != TK_EOF){
-        Cur->Next = stmt(&Tok, Tok);
-        Cur = Cur->Next;
-    }
+    Tok = skip(Tok, "{");
 
     // 函数体存储语句的AST，Locals存储变量
     Function *Prog = calloc(1,sizeof(Function));
-    Prog->Body = Head.Next;
+    Prog->Body = compoundStmt(&Tok, Tok);
     Prog->Locals = Locals;
     return Prog;
 }
