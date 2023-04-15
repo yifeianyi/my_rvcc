@@ -52,7 +52,7 @@ Token *tokenize(char *Input);
 //
 
 typedef struct Node Node;
-
+typedef struct Type Type;
 // Local var
 typedef struct Obj Obj;
 struct Obj{
@@ -82,6 +82,8 @@ typedef enum {
   ND_LT,        // <
   ND_LE,        // <=
   ND_ASSIGN,    // 赋值
+  ND_ADDR,
+  ND_DEREF,
   ND_RETURN,
   ND_IF,        // "if"，条件判断
   ND_FOR,       // "for" or "while"
@@ -97,6 +99,7 @@ struct Node {
   NodeKind Kind; 
   Node *Next;
   Token *Tok;    // 节点对应的终结符
+  Type *Ty;
 
   Node *LHS;     
   Node *RHS;
@@ -115,6 +118,25 @@ struct Node {
   int Val;       
 };
 Function *parse(Token *Tok);
+
+//
+// 类型系统
+//
+typedef enum{
+  TY_INT,  // int 
+  TY_PTR,  // pointer
+}TypeKind;
+
+struct Type{
+  TypeKind Kind;
+  Type *Base;     // 指向的类型
+};
+
+extern Type *TyInt;
+
+bool isInteger(Type *TY);
+void addType(Node *Nd);
+
 
 //
 // 语义分析与代码生成

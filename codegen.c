@@ -1,7 +1,7 @@
 #include "rvcc.h"
 
 static int Depth;
-
+static void genExpr(Node *Nd);
 // Count of code block
 static int count(void){
   static int I = 1;
@@ -22,12 +22,20 @@ static void pop(char *Reg) {
 }
 
 static void genAddr(Node *Nd){
-  if(Nd->Kind == ND_VAR){
+  switch (Nd->Kind)
+  {
+  case ND_VAR:
     printf("  # 获取变量%s的栈内地址为%d(fp)\n", Nd->Var->Name,
           Nd->Var->Offset);
     printf("    addi a0, fp, %d\n", Nd->Var->Offset);
     return ;
+  case ND_DEREF:
+    genExpr(Nd->LHS);
+    return ;
+  default:
+    break;
   }
+
   errorTok(Nd->Tok,"not an lvalue");
 }
 
@@ -39,29 +47,37 @@ static int alignTo(int N, int Align){
 static void genExpr(Node *Nd) {
   switch (Nd->Kind) {
     case ND_NUM:
-        printf("  # 将%d加载到a0中\n", Nd->Val);
-        printf("  li a0, %d\n", Nd->Val);
-        return;
+      printf("  # 将%d加载到a0中\n", Nd->Val);
+      printf("  li a0, %d\n", Nd->Val);
+      return;
     case ND_NEG:
-        genExpr(Nd->LHS);
-        printf("  # 对a0值进行取反\n");
-        printf("  neg a0, a0\n");
-        return;
+      genExpr(Nd->LHS);
+      printf("  # 对a0值进行取反\n");
+      printf("  neg a0, a0\n");
+      return;
     case ND_VAR:
-        genAddr(Nd);
-        printf("  # 读取a0中存放的地址，得到的值存入a0\n");
-        printf("    ld a0, 0(a0)\n");
-        return ;
+      genAddr(Nd);
+      printf("  # 读取a0中存放的地址，得到的值存入a0\n");
+      printf("    ld a0, 0(a0)\n");
+      return ;
+    case ND_DEREF:
+      genExpr(Nd->LHS);
+      printf("  # 读取a0中存放的地址，得到的值存入a0\n");
+      printf("  ld a0, 0(a0)\n");
+      return ;
+    case ND_ADDR:
+      genAddr(Nd->LHS);
+      return ;
     case ND_ASSIGN:
-        genAddr(Nd->LHS);
-        push();
-        genExpr(Nd->RHS);
-        pop("a1");
-        printf("  # 将a0的值，写入到a1中存放的地址\n");
-        printf("    sd a0, 0(a1)\n");
-        return;
+      genAddr(Nd->LHS);
+      push();
+      genExpr(Nd->RHS);
+      pop("a1");
+      printf("  # 将a0的值，写入到a1中存放的地址\n");
+      printf("    sd a0, 0(a1)\n");
+      return;
     default:
-        break;
+      break;
   }
 
   genExpr(Nd->RHS);
