@@ -42,33 +42,34 @@ static Obj *findVar(Token *Tok){
   return NULL;
 }
 
-static Node *newNode(NodeKind Kind) {
+static Node *newNode(NodeKind Kind, Token *Tok) {
   Node *Nd = calloc(1, sizeof(Node));
   Nd->Kind = Kind;
+  Nd->Tok = Tok;
   return Nd;
 }
 
-static Node *newUnary(NodeKind Kind, Node *Expr) {
-  Node *Nd = newNode(Kind);
+static Node *newUnary(NodeKind Kind, Node *Expr, Token *Tok) {
+  Node *Nd = newNode(Kind, Tok);
   Nd->LHS = Expr;
   return Nd;
 }
 
-static Node *newBinary(NodeKind Kind, Node *LHS, Node *RHS) {
-  Node *Nd = newNode(Kind);
+static Node *newBinary(NodeKind Kind, Node *LHS, Node *RHS, Token *Tok) {
+  Node *Nd = newNode(Kind,Tok);
   Nd->LHS = LHS;
   Nd->RHS = RHS;
   return Nd;
 }
 
-static Node *newNum(int Val) {
-  Node *Nd = newNode(ND_NUM);
+static Node *newNum(int Val, Token *Tok) {
+  Node *Nd = newNode(ND_NUM, Tok);
   Nd->Val = Val;
   return Nd;
 }
 
-static Node *newVarNode(Obj *Var){
-    Node *Nd = newNode(ND_VAR);
+static Node *newVarNode(Obj *Var, Token *Tok){
+    Node *Nd = newNode(ND_VAR, Tok);
     Nd->Var = Var;
     return Nd;
 }
@@ -86,13 +87,13 @@ static Obj *newLVar(char *Name){
 // 解析语句
 static Node *stmt(Token **Rest, Token *Tok){ 
   if(equal(Tok, "return")){
-    Node *Nd = newUnary(ND_RETURN, expr(&Tok, Tok->Next))  ;
+    Node *Nd = newUnary(ND_RETURN, expr(&Tok, Tok->Next), Tok)  ;
     *Rest = skip(Tok, ";");
     return Nd;
   }
 
   if(equal(Tok, "if")){
-    Node *Nd = newNode(ND_IF);
+    Node *Nd = newNode(ND_IF, Tok);
     Tok = skip(Tok->Next, "(");
     Nd->Cond = expr(&Tok, Tok);
     Tok = skip(Tok, ")");
@@ -106,7 +107,7 @@ static Node *stmt(Token **Rest, Token *Tok){
   }
 
   if(equal(Tok, "for")){
-    Node *Nd = newNode(ND_FOR);
+    Node *Nd = newNode(ND_FOR, Tok);
     Tok = skip(Tok->Next, "(");
 
     Nd->Init = exprStmt(&Tok, Tok);
@@ -125,7 +126,7 @@ static Node *stmt(Token **Rest, Token *Tok){
   }
 
   if(equal(Tok, "while")){
-    Node *Nd = newNode(ND_FOR);
+    Node *Nd = newNode(ND_FOR, Tok);
 
     Tok = skip(Tok->Next, "(");
 
@@ -152,7 +153,7 @@ static Node *compoundStmt(Token **Rest, Token *Tok){
     Cur = Cur->Next;
   }
 
-  Node *Nd = newNode(ND_BLOCK);
+  Node *Nd = newNode(ND_BLOCK, Tok);
   Nd->Body = Head.Next;
   *Rest = Tok->Next;
   return Nd;
@@ -161,10 +162,10 @@ static Node *compoundStmt(Token **Rest, Token *Tok){
 static Node *exprStmt(Token **Rest, Token *Tok){
     if(equal(Tok, ";")){
       *Rest = Tok->Next;
-      return newNode(ND_BLOCK);
+      return newNode(ND_BLOCK, Tok);
     }
 
-    Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok));
+    Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok), Tok);
     *Rest = skip(Tok, ";");
     return Nd;
 }
@@ -176,7 +177,7 @@ static Node *assign(Token **Rest, Token *Tok){
     // 可能存在递归赋值，如a=b=1
     // ("=" assign)?
     if(equal(Tok, "=")){
-        Nd = newBinary(ND_ASSIGN, Nd, assign(&Tok, Tok->Next));
+        Nd = newBinary(ND_ASSIGN, Nd, assign(&Tok, Tok->Next), Tok);
     }
     *Rest = Tok;
     return Nd;
@@ -184,12 +185,13 @@ static Node *assign(Token **Rest, Token *Tok){
 static Node *equality(Token **Rest, Token *Tok) {
   Node *Nd = relational(&Tok, Tok);
   while (true) {
+    Token *Start = Tok;
     if (equal(Tok, "==")) {
-      Nd = newBinary(ND_EQ, Nd, relational(&Tok, Tok->Next));
+      Nd = newBinary(ND_EQ, Nd, relational(&Tok, Tok->Next), Start);
       continue;
     }
     if (equal(Tok, "!=")) {
-      Nd = newBinary(ND_NE, Nd, relational(&Tok, Tok->Next));
+      Nd = newBinary(ND_NE, Nd, relational(&Tok, Tok->Next), Start);
       continue;
     }
 
@@ -202,20 +204,21 @@ static Node *relational(Token **Rest, Token *Tok) {
   Node *Nd = add(&Tok, Tok);
 
   while (true) {
+    Token *Start = Tok;
     if (equal(Tok, "<")) {
-      Nd = newBinary(ND_LT, Nd, add(&Tok, Tok->Next));
+      Nd = newBinary(ND_LT, Nd, add(&Tok, Tok->Next), Start);
       continue;
     }
     if (equal(Tok, "<=")) {
-      Nd = newBinary(ND_LE, Nd, add(&Tok, Tok->Next));
+      Nd = newBinary(ND_LE, Nd, add(&Tok, Tok->Next), Start);
       continue;
     }
     if (equal(Tok, ">")) {
-      Nd = newBinary(ND_LT, add(&Tok, Tok->Next), Nd);
+      Nd = newBinary(ND_LT, add(&Tok, Tok->Next), Nd, Start);
       continue;
     }
     if (equal(Tok, ">=")) {
-      Nd = newBinary(ND_LE, add(&Tok, Tok->Next), Nd);
+      Nd = newBinary(ND_LE, add(&Tok, Tok->Next), Nd, Start);
       continue;
     }
 
@@ -227,13 +230,14 @@ static Node *relational(Token **Rest, Token *Tok) {
 static Node *add(Token **Rest, Token *Tok) {
   Node *Nd = mul(&Tok, Tok);
   while (true) {
+    Token *Start = Tok;
     if (equal(Tok, "+")) {
-      Nd = newBinary(ND_ADD, Nd, mul(&Tok, Tok->Next));
+      Nd = newBinary(ND_ADD, Nd, mul(&Tok, Tok->Next), Start);
       continue;
     }
 
     if (equal(Tok, "-")) {
-      Nd = newBinary(ND_SUB, Nd, mul(&Tok, Tok->Next));
+      Nd = newBinary(ND_SUB, Nd, mul(&Tok, Tok->Next), Start);
       continue;
     }
 
@@ -246,11 +250,11 @@ static Node *mul(Token **Rest, Token *Tok) {
   Node *Nd = unary(&Tok, Tok);
   while (true) {
     if (equal(Tok, "*")) {
-      Nd = newBinary(ND_MUL, Nd, unary(&Tok, Tok->Next));
+      Nd = newBinary(ND_MUL, Nd, unary(&Tok, Tok->Next), Tok);
       continue;
     }
     if (equal(Tok, "/")) {
-      Nd = newBinary(ND_DIV, Nd, unary(&Tok, Tok->Next));
+      Nd = newBinary(ND_DIV, Nd, unary(&Tok, Tok->Next), Tok);
       continue;
     }
 
@@ -264,7 +268,7 @@ static Node *unary(Token **Rest, Token *Tok) {
     return unary(Rest, Tok->Next);
 
   if (equal(Tok, "-"))
-    return newUnary(ND_NEG, unary(Rest, Tok->Next));
+    return newUnary(ND_NEG, unary(Rest, Tok->Next), Tok);
 
   return primary(Rest, Tok);
 }
@@ -284,12 +288,12 @@ static Node *primary(Token **Rest, Token *Tok) {
         Var = newLVar(strndup(Tok->Loc, Tok->Len));
       
       *Rest = Tok->Next;
-      return newVarNode(Var);
+      return newVarNode(Var, Tok);
     }
 
     // num
     if (Tok->Kind == TK_NUM) {
-        Node *Nd = newNum(Tok->Val);
+        Node *Nd = newNum(Tok->Val, Tok);
         *Rest = Tok->Next;
         return Nd;
     }

@@ -96,6 +96,8 @@ typedef enum {
 struct Node {
   NodeKind Kind; 
   Node *Next;
+  Token *Tok;    // 节点对应的终结符
+
   Node *LHS;     
   Node *RHS;
 

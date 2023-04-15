@@ -8,23 +8,27 @@ static int count(void){
   return I++;
 }
 static void push(void) {
+  printf("  # 压栈，将a0的值存入栈顶\n");
   printf("  addi sp, sp, -8\n");
   printf("  sd a0, 0(sp)\n");
   Depth++;
 }
 
 static void pop(char *Reg) {
+  printf("  # 弹栈，将栈顶的值存入%s\n", Reg);
   printf("  ld %s, 0(sp)\n", Reg);
   printf("  addi sp, sp, 8\n");
   Depth--;
 }
 
 static void genAddr(Node *Nd){
-    if(Nd->Kind == ND_VAR){
-        printf("    addi a0, fp, %d\n", Nd->Var->Offset);
-        return ;
-    }
-    error("not an lvalue");
+  if(Nd->Kind == ND_VAR){
+    printf("  # 获取变量%s的栈内地址为%d(fp)\n", Nd->Var->Name,
+          Nd->Var->Offset);
+    printf("    addi a0, fp, %d\n", Nd->Var->Offset);
+    return ;
+  }
+  errorTok(Nd->Tok,"not an lvalue");
 }
 
 // 对齐到Align的整数倍
@@ -35,14 +39,17 @@ static int alignTo(int N, int Align){
 static void genExpr(Node *Nd) {
   switch (Nd->Kind) {
     case ND_NUM:
+        printf("  # 将%d加载到a0中\n", Nd->Val);
         printf("  li a0, %d\n", Nd->Val);
         return;
     case ND_NEG:
         genExpr(Nd->LHS);
+        printf("  # 对a0值进行取反\n");
         printf("  neg a0, a0\n");
         return;
     case ND_VAR:
         genAddr(Nd);
+        printf("  # 读取a0中存放的地址，得到的值存入a0\n");
         printf("    ld a0, 0(a0)\n");
         return ;
     case ND_ASSIGN:
@@ -50,6 +57,7 @@ static void genExpr(Node *Nd) {
         push();
         genExpr(Nd->RHS);
         pop("a1");
+        printf("  # 将a0的值，写入到a1中存放的地址\n");
         printf("    sd a0, 0(a1)\n");
         return;
     default:
@@ -63,15 +71,19 @@ static void genExpr(Node *Nd) {
 
   switch (Nd->Kind) {
   case ND_ADD: 
+    printf("  # a0 = a0 + a1\n");
     printf("  add a0, a0, a1\n");
     return;
   case ND_SUB: 
+    printf("  # a0 = a0 - a1\n");
     printf("  sub a0, a0, a1\n");
     return;
   case ND_MUL: 
+  printf("  # a0 = a0 * a1\n");
     printf("  mul a0, a0, a1\n");
     return;
   case ND_DIV: 
+  printf("  # a0 = a0 / a1\n");
     printf("  div a0, a0, a1\n");
     return;
   case ND_EQ:
@@ -84,9 +96,11 @@ static void genExpr(Node *Nd) {
       printf("  snez a0, a0\n");
     return;
   case ND_LT:
+    printf("  # 判断a0<a1\n");
     printf("  slt a0, a0, a1\n");
     return;
   case ND_LE:
+    printf("  # 判断是否a0≤a1\n");
     printf("  slt a0, a1, a0\n");
     printf("  xori a0, a0, 1\n");
     return;
@@ -102,37 +116,59 @@ static void genStmt(Node *Nd){
   {
   case ND_IF:{
     int C = count();
+    printf("\n# =====分支语句%d==============\n", C);
+    printf("\n# Cond表达式%d\n", C);
+
     genExpr(Nd->Cond);
+
+    printf("  # 若a0为0，则跳转到分支%d的.L.else.%d段\n", C, C);
     printf("  beqz a0, .L.else.%d\n", C);
 
+    printf("\n# Then语句%d\n", C);
     genStmt(Nd->Then);
+
+    printf("  # 跳转到分支%d的.L.end.%d段\n", C, C);
     printf("  j .L.end.%d\n",C);
+
+    printf("\n# Else语句%d\n", C);
+    printf("# 分支%d的.L.else.%d段标签\n", C, C);
     printf(".L.else.%d:\n",C);
     if(Nd->Els)
       genStmt(Nd->Els);
-    // 结束if语句，继续执行后面的语句
+
+    printf("\n# 分支%d的.L.end.%d段标签\n", C, C);
     printf(".L.end.%d:\n",C);
     return ;
   }
   case ND_FOR:{
     int C = count();
-    #ifdef DEBUG
-    printf("================ Debug ==============\n");
-    #endif
+    printf("\n# =====循环语句%d===============\n", C);
 
-    if(Nd->Init)
+    if(Nd->Init){
+      printf("\n# Init语句%d\n", C);
       genStmt(Nd->Init);
-
+    }
+      
+    printf("\n# 循环%d的.L.begin.%d段标签\n", C, C);
     printf(".L.begin.%d:\n",C);
+
+    printf("# Cond表达式%d\n", C);
     if(Nd->Cond){
       genExpr(Nd->Cond);
+      printf("  # 若a0为0，则跳转到循环%d的.L.end.%d段\n", C, C);
       printf("  beqz a0, .L.end.%d\n", C);
     }
 
     genStmt(Nd->Then);
-    if(Nd->Inc)
+    if(Nd->Inc){
+      printf("\n# Inc语句%d\n", C);
       genExpr(Nd->Inc);
+    }
+    
+    printf("  # 跳转到循环%d的.L.begin.%d段\n", C, C);
     printf("  j .L.begin.%d\n", C);
+
+    printf("\n# 循环%d的.L.end.%d段标签\n", C, C);
     printf(".L.end.%d:\n", C);
     return ;
   }
@@ -141,7 +177,10 @@ static void genStmt(Node *Nd){
       genStmt(N);
     return ;
   case ND_RETURN:
+    printf("# 返回语句\n");
     genExpr(Nd->LHS);
+
+    printf("  # 跳转到.L.return段\n");
     printf("  j .L.return\n");
     return ;
     
@@ -153,7 +192,7 @@ static void genStmt(Node *Nd){
   default:
     break;
   }
-  error("invalid statement");
+  errorTok(Nd->Tok,"invalid statement");
 }
 
 static void assignLVarOffsets(Function *Prog){
@@ -168,6 +207,8 @@ static void assignLVarOffsets(Function *Prog){
 void codegen(Function *Prog){
   assignLVarOffsets(Prog);
     printf("    .globl main\n");
+    printf("\n# =====程序开始===============\n");
+    printf("# main段标签，也是程序入口段\n");
     printf("main:\n");
 
   // 栈布局
@@ -187,17 +228,20 @@ void codegen(Function *Prog){
     printf("  mv fp, sp\n");  // 将sp写入fp
     printf("  addi sp, sp, -%d\n", Prog->StackSize);// 26个字母*8字节=208字节，栈腾出208字节的空间
 
-
+    printf("\n# =====程序主体===============\n");
     genStmt(Prog->Body);
     assert(Depth == 0);
 
     // Epilogue，后语
     // 将fp的值改写回sp
+    printf("\n# =====程序结束===============\n");
+    printf("# return段标签\n");
     printf(".L.return: \n");
     printf("  mv sp, fp\n");
     // 将最早fp保存的值弹栈，恢复fp。
     printf("  ld fp, 0(sp)\n");
     printf("  addi sp, sp, 8\n");
     // 返回
+    printf("  # 返回a0值给系统调用\n");
     printf("    ret\n");
 }
