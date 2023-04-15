@@ -46,6 +46,16 @@ Token *skip(Token *Tok,char *Str){
     return Tok->Next;
 }
 
+// 消耗掉指定Token
+bool consume(Token **Rest, Token *Tok, char *Str){
+    if(equal(Tok, Str)){
+        *Rest = Tok->Next;
+        return true;
+    }
+    *Rest = Tok;
+    return false;
+}
+
 static int getNumber(Token *Tok){
     if(Tok->Kind != TK_NUM)//error("expect a number");
         errorTok(Tok, "expect a number");

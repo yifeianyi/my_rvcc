@@ -4,7 +4,11 @@
 Obj *Locals;
 
 // program = "{" compoundStmt   
-// compoundStmt = stmt* "}"     
+// compoundStmt = ( declaration | stmt )*   "}"  
+// declaration = 
+//    declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";" 
+// declspec = "int"
+// declarator = "*"* ident
 // stmt = "return" expr ";" 
 //      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | "for" "(" exprStmt expr? ";" expr? ")" stmt 
@@ -22,6 +26,8 @@ Obj *Locals;
 // primary = "(" expr ")" | ident | num
 
 static Node *compoundStmt(Token **Rest, Token *Tok);
+static Node *declaration(Token **Rest, Token *Tok);
+static Node *stmt(Token **Rest, Token *Tok);
 static Node *exprStmt(Token **Rest, Token *Tok);
 static Node *expr(Token **Rest, Token *Tok);
 static Node *assign(Token **Rest, Token *Tok);
@@ -75,19 +81,79 @@ static Node *newVarNode(Obj *Var, Token *Tok){
 }
 
 //Create a new Var in list
-static Obj *newLVar(char *Name){
+static Obj *newLVar(char *Name,Type *Ty){
   Obj *Var = calloc(1, sizeof(Obj));
   Var->Name = Name;
+  Var->Ty = Ty;
   Var->Next = Locals;
   Locals = Var;
   return Var;
 }
 
+// 获取标识符
+static char *getIdent(Token *Tok){
+  if(Tok->Kind != TK_IDENT)
+    errorTok(Tok, "expected an identifier");
+  return strndup(Tok->Loc, Tok->Len);
+}
+
+static Type *declspec(Token **Rest, Token *Tok){
+  *Rest = skip(Tok, "int");
+  return TyInt;
+}
+
+// declarator = "*"* ident
+static Type *declarator(Token **Rest, Token *Tok, Type *Ty){
+  while(consume(&Tok, Tok, "*"))
+    Ty = pointerTo(Ty);
+  
+  if(Tok->Kind != TK_IDENT)
+    errorTok(Tok, "expected a variable name");
+
+  Ty->Name = Tok;
+  *Rest = Tok->Next;
+  return Ty;
+}
+
+static Node *declaration(Token **Rest, Token *Tok){
+  Type *Basety = declspec(&Tok, Tok);
+
+  Node Head = {};
+  Node *Cur = &Head;
+
+  int I = 0;
+
+  while(!equal(Tok, ";")){
+    // 第1个变量不必匹配 ","
+    if(I++ > 0)
+      Tok = skip(Tok, ",");
+
+    Type *Ty = declarator(&Tok, Tok, Basety);
+    Obj *Var = newLVar(getIdent(Ty->Name), Ty);
+
+    if(!equal(Tok, "="))
+      continue;
+
+    Node *LHS = newVarNode(Var, Ty->Name);
+
+    Node *RHS = assign(&Tok, Tok->Next);
+    Node *Node = newBinary(ND_ASSIGN, LHS, RHS, Tok);
+
+    Cur->Next = newUnary(ND_EXPR_STMT, Node, Tok);
+    Cur = Cur->Next;
+  }
+
+  Node *Nd = newNode(ND_BLOCK, Tok);
+  Nd->Body = Head.Next;
+  *Rest = Tok->Next;
+  return Nd;
+}
 
 // 解析语句
 static Node *stmt(Token **Rest, Token *Tok){ 
   if(equal(Tok, "return")){
-    Node *Nd = newUnary(ND_RETURN, expr(&Tok, Tok->Next), Tok)  ;
+    Node *Nd = newNode(ND_RETURN, Tok);
+    Nd->LHS = expr(&Tok, Tok->Next);
     *Rest = skip(Tok, ";");
     return Nd;
   }
@@ -149,7 +215,13 @@ static Node *compoundStmt(Token **Rest, Token *Tok){
   Node Head = {};
   Node *Cur = &Head;
   while(!equal(Tok, "}")){
-    Cur->Next = stmt(&Tok, Tok);
+
+    if(equal(Tok, "int")){
+      Cur->Next = declaration(&Tok, Tok);
+    }
+    else {
+      Cur->Next = stmt(&Tok, Tok);
+    }
     Cur = Cur->Next;
 
     addType(Cur);
@@ -162,28 +234,32 @@ static Node *compoundStmt(Token **Rest, Token *Tok){
 }
 
 static Node *exprStmt(Token **Rest, Token *Tok){
-    if(equal(Tok, ";")){
-      *Rest = Tok->Next;
-      return newNode(ND_BLOCK, Tok);
-    }
+  if(equal(Tok, ";")){
+    *Rest = Tok->Next;
+    return newNode(ND_BLOCK, Tok);
+  }
 
-    Node *Nd = newUnary(ND_EXPR_STMT, expr(&Tok, Tok), Tok);
-    *Rest = skip(Tok, ";");
-    return Nd;
+  Node *Nd = newNode(ND_EXPR_STMT, Tok);
+  Nd->LHS = expr(&Tok, Tok);
+  *Rest = skip(Tok, ";");
+  return Nd;
 }
+
 static Node *expr(Token **Rest, Token *Tok) { return assign(Rest, Tok); }
 
 static Node *assign(Token **Rest, Token *Tok){
-    Node *Nd = equality(&Tok, Tok);
+  Node *Nd = equality(&Tok, Tok);
 
-    // 可能存在递归赋值，如a=b=1
-    // ("=" assign)?
-    if(equal(Tok, "=")){
-        Nd = newBinary(ND_ASSIGN, Nd, assign(&Tok, Tok->Next), Tok);
-    }
-    *Rest = Tok;
-    return Nd;
+  // 可能存在递归赋值，如a=b=1
+  // ("=" assign)?
+  if(equal(Tok, "=")){
+      Nd = newBinary(ND_ASSIGN, Nd, assign(&Tok, Tok->Next), Tok);
+  }
+  *Rest = Tok;
+  return Nd;
 }
+
+
 static Node *equality(Token **Rest, Token *Tok) {
   Node *Nd = relational(&Tok, Tok);
   while (true) {
@@ -348,8 +424,9 @@ static Node *primary(Token **Rest, Token *Tok) {
     if(Tok->Kind == TK_IDENT){
       Obj *Var = findVar(Tok);
 
+      // 如果变量不存在，就在链表中新增一个变量
       if(!Var)
-        Var = newLVar(strndup(Tok->Loc, Tok->Len));
+        errorTok(Tok, "undefined variable");
       
       *Rest = Tok->Next;
       return newVarNode(Var, Tok);

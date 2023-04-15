@@ -42,7 +42,7 @@ void errorTok(Token *Tok, char *Fmt, ...);
 // 判断Token与Str的关系
 bool equal(Token *Tok, char *Str);
 Token *skip(Token *Tok, char *Str);
-
+bool consume(Token **Rest, Token *Tok, char *Str);
 // 词法分析
 Token *tokenize(char *Input);
 
@@ -58,6 +58,7 @@ typedef struct Obj Obj;
 struct Obj{
   Obj *Next;
   char *Name;
+  Type *Ty;
   int Offset;
 };
 
@@ -130,11 +131,13 @@ typedef enum{
 struct Type{
   TypeKind Kind;
   Type *Base;     // 指向的类型
+  Token *Name;
 };
 
 extern Type *TyInt;
 
 bool isInteger(Type *TY);
+Type *pointerTo(Type *Base);
 void addType(Node *Nd);
 
 
