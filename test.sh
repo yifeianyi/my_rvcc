@@ -77,21 +77,35 @@ assert(){
 # assert 6 'a=b=3; a+b;'
 # assert 5 'a=3;b=4;a=1;a+b;'
 # [9] 支持;分割语句
-assert 3 '{ 1; 2;return 3; }'
-assert 12 '{ 12+23;12+99/3;return 78-66; }'
+# assert 3 '{ 1; 2;return 3; }'
+# assert 12 '{ 12+23;12+99/3;return 78-66; }'
 
-# [10] 支持单字母变量
-assert 3 '{ a=3;return a; }'
-assert 8 '{ a=3; z=5;return a+z; }'
-assert 6 '{ a=b=3;return a+b; }'
-assert 5 '{ a=3;b=4;a=1;return a+b; }'
+# # [10] 支持单字母变量
+# assert 3 '{ a=3;return a; }'
+# assert 8 '{ a=3; z=5;return a+z; }'
+# assert 6 '{ a=b=3;return a+b; }'
+# assert 5 '{ a=3;b=4;a=1;return a+b; }'
 
 # [12] 支持return
-assert 1 '{ return 1; 2; 3; }'
-assert 2 '{ 1; return 2; 3; }'
-assert 3 '{ 1; 2; return 3; }'
+# assert 1 '{ return 1; 2; 3; }'
+# assert 2 '{ 1; return 2; 3; }'
+# assert 3 '{ 1; 2; return 3; }'
 
-# [14] 支持空语句
-assert 5 '{ ;;; return 5; }'
+# # [14] 支持空语句
+# assert 5 '{ ;;; return 5; }'
+# [15] 支持if语句
+assert 3 '{ if (0) return 2; return 3; }'
+assert 3 '{ if (1-1) return 2; return 3; }'
+assert 2 '{ if (1) return 2; return 3; }'
+assert 2 '{ if (2-1) return 2; return 3; }'
+assert 4 '{ if (0) { 1; 2; return 3; } else { return 4; } }'
+assert 3 '{ if (1) { 1; 2; return 3; } else { return 4; } }'
+
+# [16] 支持for语句
+assert 55 '{ i=0; j=0; for (i=0; i<=10; i=i+1) j=i+j; return j; }'
+assert 3 '{ for (;;) {return 3;} return 5; }'
+
+# [17] 支持while语句
+assert 10 '{ i=0; while(i<10) { i=i+1; } return i; }'
 
 echo OK

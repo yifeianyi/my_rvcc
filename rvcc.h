@@ -1,6 +1,7 @@
 // 使用POSIX.1标准
 // 使用了strndup函数
 #define _POSIX_C_SOURCE 200809L
+// #define DEBUG
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -82,6 +83,8 @@ typedef enum {
   ND_LE,        // <=
   ND_ASSIGN,    // 赋值
   ND_RETURN,
+  ND_IF,        // "if"，条件判断
+  ND_FOR,       // "for" or "while"
   ND_BLOCK,     // { ... }, code block
   ND_EXPR_STMT, // Expr
   ND_VAR,       // var
@@ -95,6 +98,15 @@ struct Node {
   Node *Next;
   Node *LHS;     
   Node *RHS;
+
+  // "if"  or "for"
+  Node *Cond; // if expr
+  Node *Then; // 符合条件后的语句
+  Node *Els;  // 不符合条件后的语句
+  Node *Init; 
+  Node *Inc;  
+
+
   // code block
   Node *Body;  
   Obj *Var; 

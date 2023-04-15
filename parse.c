@@ -3,9 +3,14 @@
 // 在解析时，全部的变量实例都被累加到这个列表里。
 Obj *Locals;
 
-// program = "{" compoundStmt   //to do
-// compoundStmt = stmt* "}"     //to do
-// stmt = "return" expr ";" | "{" compoundStmt | exprStmt //to do
+// program = "{" compoundStmt   
+// compoundStmt = stmt* "}"     
+// stmt = "return" expr ";" 
+//      | "if" "(" expr ")" stmt ("else" stmt)?
+//      | "for" "(" expr ")" stmt ("else" stmt)?
+//      | "while" "(" expr ")" stmt
+//      | "{" compoundStmt 
+//      | exprStmt 
 // exprStmt = expr ";"
 // expr = assign 
 // assign = equality ("=" assign)?
@@ -14,7 +19,7 @@ Obj *Locals;
 // add = mul ("+" mul | "-" mul)*
 // mul = unary ("*" unary | "/" unary)*
 // unary = ("+" | "-") unary | primary
-// primary = "(" expr ")" | num
+// primary = "(" expr ")" | ident | num
 
 static Node *compoundStmt(Token **Rest, Token *Tok);
 static Node *exprStmt(Token **Rest, Token *Tok);
@@ -85,6 +90,53 @@ static Node *stmt(Token **Rest, Token *Tok){
     *Rest = skip(Tok, ";");
     return Nd;
   }
+
+  if(equal(Tok, "if")){
+    Node *Nd = newNode(ND_IF);
+    Tok = skip(Tok->Next, "(");
+    Nd->Cond = expr(&Tok, Tok);
+    Tok = skip(Tok, ")");
+    Nd->Then = stmt(&Tok, Tok);
+
+    if(equal(Tok, "else"))
+      Nd->Els = stmt(&Tok, Tok->Next);
+    
+    *Rest = Tok;
+    return Nd;
+  }
+
+  if(equal(Tok, "for")){
+    Node *Nd = newNode(ND_FOR);
+    Tok = skip(Tok->Next, "(");
+
+    Nd->Init = exprStmt(&Tok, Tok);
+
+    if(!equal(Tok, ";"))
+      Nd->Cond = expr(&Tok, Tok);
+    
+    Tok = skip(Tok, ";");
+
+    if(!equal(Tok, ")"))
+      Nd->Inc = expr(&Tok, Tok);
+    Tok = skip(Tok, ")");
+
+    Nd->Then = stmt(Rest, Tok);
+    return Nd;
+  }
+
+  if(equal(Tok, "while")){
+    Node *Nd = newNode(ND_FOR);
+
+    Tok = skip(Tok->Next, "(");
+
+    Nd->Cond = expr(&Tok, Tok);
+
+    Tok = skip(Tok, ")");
+    
+    Nd->Then = stmt(Rest, Tok);
+    return Nd;
+  }
+
 
   if(equal(Tok, "{"))
     return compoundStmt(Rest, Tok->Next);
@@ -241,20 +293,11 @@ static Node *primary(Token **Rest, Token *Tok) {
         *Rest = Tok->Next;
         return Nd;
     }
-
-
     errorTok(Tok, "expected an expression");
     return NULL;
 }
 
 Function *parse(Token *Tok){
-    // Node Head = {};
-    // Node *Cur = &Head;
-    // while(Tok->Kind != TK_EOF){
-    //     Cur->Next = stmt(&Tok, Tok);
-    //     Cur = Cur->Next;
-    // }
-
     Tok = skip(Tok, "{");
 
     // 函数体存储语句的AST，Locals存储变量

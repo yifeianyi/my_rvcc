@@ -2,6 +2,11 @@
 
 static int Depth;
 
+// Count of code block
+static int count(void){
+  static int I = 1;
+  return I++;
+}
 static void push(void) {
   printf("  addi sp, sp, -8\n");
   printf("  sd a0, 0(sp)\n");
@@ -92,24 +97,63 @@ static void genExpr(Node *Nd) {
 }
 
 static void genStmt(Node *Nd){
-    switch (Nd->Kind)
-    {
-    case ND_BLOCK:
-      for(Node *N = Nd->Body; N; N = N->Next)
-        genStmt(N);
-      return ;
-    case ND_RETURN:
-      genExpr(Nd->LHS);
-      printf("  j .L.return\n");
-      return ;
-    case ND_EXPR_STMT:
-      genExpr(Nd->LHS);
-      return;
-    
-    default:
-      break;
+
+  switch (Nd->Kind)
+  {
+  case ND_IF:{
+    int C = count();
+    genExpr(Nd->Cond);
+    printf("  beqz a0, .L.else.%d\n", C);
+
+    genStmt(Nd->Then);
+    printf("  j .L.end.%d\n",C);
+    printf(".L.else.%d:\n",C);
+    if(Nd->Els)
+      genStmt(Nd->Els);
+    // 结束if语句，继续执行后面的语句
+    printf(".L.end.%d:\n",C);
+    return ;
+  }
+  case ND_FOR:{
+    int C = count();
+    #ifdef DEBUG
+    printf("================ Debug ==============\n");
+    #endif
+
+    if(Nd->Init)
+      genStmt(Nd->Init);
+
+    printf(".L.begin.%d:\n",C);
+    if(Nd->Cond){
+      genExpr(Nd->Cond);
+      printf("  beqz a0, .L.end.%d\n", C);
     }
-    error("invalid statement");
+
+    genStmt(Nd->Then);
+    if(Nd->Inc)
+      genExpr(Nd->Inc);
+    printf("  j .L.begin.%d\n", C);
+    printf(".L.end.%d:\n", C);
+    return ;
+  }
+  case ND_BLOCK:
+    for(Node *N = Nd->Body; N; N = N->Next)
+      genStmt(N);
+    return ;
+  case ND_RETURN:
+    genExpr(Nd->LHS);
+    printf("  j .L.return\n");
+    return ;
+    
+  // 生成表达式语句
+  case ND_EXPR_STMT:
+    genExpr(Nd->LHS);
+    return;
+  
+  default:
+    break;
+  }
+  error("invalid statement");
 }
 
 static void assignLVarOffsets(Function *Prog){
@@ -138,15 +182,14 @@ void codegen(Function *Prog){
 
     // Prologue, 前言
     // 将fp压入栈中，保存fp的值
-    printf("    addi sp, sp, -8\n");
-    printf("    sd fp, 0(sp)\n");
-    printf("    mv fp, sp\n");  // 将sp写入fp
-    printf("    addi sp, sp, -%d\n", Prog->StackSize);// 26个字母*8字节=208字节，栈腾出208字节的空间
+    printf("  addi sp, sp, -8\n");
+    printf("  sd fp, 0(sp)\n");
+    printf("  mv fp, sp\n");  // 将sp写入fp
+    printf("  addi sp, sp, -%d\n", Prog->StackSize);// 26个字母*8字节=208字节，栈腾出208字节的空间
 
-    for(Node *N = Prog->Body; N; N=N->Next){
-        genStmt(N);
-        assert(Depth == 0);
-    }
+
+    genStmt(Prog->Body);
+    assert(Depth == 0);
 
     // Epilogue，后语
     // 将fp的值改写回sp
