@@ -3,30 +3,38 @@
 // 在解析时，全部的变量实例都被累加到这个列表里。
 Obj *Locals;
 
-// program = "{" compoundStmt   
-// compoundStmt = ( declaration | stmt )*   "}"  
-// declaration = 
-//    declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";" 
+// program = functionDefinition*
+// functionDefinition = declspec declarator "{" compoundStmt*
 // declspec = "int"
-// declarator = "*"* ident
-// stmt = "return" expr ";" 
-//      | "if" "(" expr ")" stmt ("else" stmt)?
-//      | "for" "(" exprStmt expr? ";" expr? ")" stmt 
-//      | "while" "(" expr ")" stmt
-//      | "{" compoundStmt 
-//      | exprStmt 
-// exprStmt = expr ";"
-// expr = assign 
+// declarator = "*"* ident typeSuffix
+// typeSuffix = ("(" funcParams? ")")?
+// funcParams = param ("," param)*
+// param = declspec declarator
+
+// compoundStmt = (declaration | stmt)* "}"
+// declaration =
+//    declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
+// stmt = "return" expr ";"
+//        | "if" "(" expr ")" stmt ("else" stmt)?
+//        | "for" "(" exprStmt expr? ";" expr? ")" stmt
+//        | "while" "(" expr ")" stmt
+//        | "{" compoundStmt
+//        | exprStmt
+// exprStmt = expr? ";"
+// expr = assign
 // assign = equality ("=" assign)?
 // equality = relational ("==" relational | "!=" relational)*
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 // add = mul ("+" mul | "-" mul)*
 // mul = unary ("*" unary | "/" unary)*
-// unary = ("+" | "-" | "*" | "&" ) unary | primary  // to do
-// primary = "(" expr ")" | ident | num
+// unary = ("+" | "-" | "*" | "&") unary | primary
+// primary = "(" expr ")" | ident func-args? | num
+// funcall = ident "(" (assign ("," assign)*)? ")"
 
-static Node *compoundStmt(Token **Rest, Token *Tok);
+static Type *declspec(Token **Rest, Token *Tok);
+static Type *declarator(Token **Rest, Token *Tok, Type *Ty);
 static Node *declaration(Token **Rest, Token *Tok);
+static Node *compoundStmt(Token **Rest, Token *Tok);
 static Node *stmt(Token **Rest, Token *Tok);
 static Node *exprStmt(Token **Rest, Token *Tok);
 static Node *expr(Token **Rest, Token *Tok);
@@ -102,6 +110,37 @@ static Type *declspec(Token **Rest, Token *Tok){
   return TyInt;
 }
 
+
+// typeSuffix = ("(" funcParams? ")")?
+// funcParams = param ("," param)*
+// param = declspec declarator
+static Type *typeSuffix(Token **Rest, Token *Tok, Type *Ty) {
+  // ("(" funcParams? ")")?
+  if (equal(Tok, "(")) {
+    Tok = Tok->Next;
+
+    Type Head = {};
+    Type *Cur = &Head;
+
+    while (!equal(Tok, ")")) {
+      if (Cur != &Head)
+        Tok = skip(Tok, ",");
+      Type *BaseTy = declspec(&Tok, Tok);
+      Type *DeclarTy = declarator(&Tok, Tok, BaseTy);
+      Cur->Next = copyType(DeclarTy);
+      Cur = Cur->Next;
+    }
+
+    Ty = funcType(Ty);
+    Ty->Params = Head.Next;
+    *Rest = Tok->Next;
+    return Ty;
+  }
+  *Rest = Tok;
+  return Ty;
+}
+
+
 // declarator = "*"* ident
 static Type *declarator(Token **Rest, Token *Tok, Type *Ty){
   while(consume(&Tok, Tok, "*"))
@@ -110,8 +149,8 @@ static Type *declarator(Token **Rest, Token *Tok, Type *Ty){
   if(Tok->Kind != TK_IDENT)
     errorTok(Tok, "expected a variable name");
 
+  Ty = typeSuffix(Rest, Tok->Next, Ty);
   Ty->Name = Tok;
-  *Rest = Tok->Next;
   return Ty;
 }
 
@@ -413,6 +452,32 @@ static Node *unary(Token **Rest, Token *Tok) {
   return primary(Rest, Tok);
 }
 
+static Node *funCall(Token **Rest, Token *Tok) {
+  Token *Start = Tok;
+  Tok = Tok->Next->Next;
+
+  Node Head = {};
+  Node *Cur = &Head;
+
+  while (!equal(Tok, ")")) {
+    if (Cur != &Head)
+      Tok = skip(Tok, ",");
+    // assign
+    Cur->Next = assign(&Tok, Tok);
+    Cur = Cur->Next;
+  }
+
+  *Rest = skip(Tok, ")");
+
+  Node *Nd = newNode(ND_FUNCALL, Start);
+  // ident
+  Nd->FuncName = strndup(Start->Loc, Start->Len);
+  Nd->Args = Head.Next;
+  return Nd;
+}
+
+
+
 static Node *primary(Token **Rest, Token *Tok) {
     if (equal(Tok, "(")) {
         Node *Nd = expr(&Tok, Tok->Next);
@@ -422,8 +487,11 @@ static Node *primary(Token **Rest, Token *Tok) {
 
     // ident
     if(Tok->Kind == TK_IDENT){
+      // 函数调用
+      if (equal(Tok->Next, "("))
+        return funCall(Rest, Tok);
+      
       Obj *Var = findVar(Tok);
-
       // 如果变量不存在，就在链表中新增一个变量
       if(!Var)
         errorTok(Tok, "undefined variable");
@@ -442,12 +510,39 @@ static Node *primary(Token **Rest, Token *Tok) {
     return NULL;
 }
 
-Function *parse(Token *Tok){
-    Tok = skip(Tok, "{");
 
-    // 函数体存储语句的AST，Locals存储变量
-    Function *Prog = calloc(1,sizeof(Function));
-    Prog->Body = compoundStmt(&Tok, Tok);
-    Prog->Locals = Locals;
-    return Prog;
+static void createParamLVars(Type *Param) {
+  if (Param) {
+    createParamLVars(Param->Next);
+    newLVar(getIdent(Param->Name), Param);
+  }
+}
+
+// functionDefinition = declspec declarator "{" compoundStmt*
+static Function *function(Token **Rest, Token *Tok) {
+  Type *Ty = declspec(&Tok, Tok);
+  Ty = declarator(&Tok, Tok, Ty);
+
+  Locals = NULL;
+
+  // 从解析完成的Ty中读取ident
+  Function *Fn = calloc(1, sizeof(Function));
+  Fn->Name = getIdent(Ty->Name);
+  createParamLVars(Ty->Params);
+  Fn->Params = Locals;
+
+  Tok = skip(Tok, "{");
+  Fn->Body = compoundStmt(Rest, Tok);
+  Fn->Locals = Locals;
+  return Fn;
+}
+
+
+Function *parse(Token *Tok){
+  Function Head = {};
+  Function *Cur = &Head;
+
+  while (Tok->Kind != TK_EOF)
+    Cur = Cur->Next = function(&Tok, Tok);
+  return Head.Next;
 }

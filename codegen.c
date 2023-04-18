@@ -1,6 +1,10 @@
 #include "rvcc.h"
 
 static int Depth;
+
+static char *ArgReg[] = {"a0", "a1", "a2", "a3", "a4", "a5"};
+static Function *CurrentFn;
+
 static void genExpr(Node *Nd);
 // Count of code block
 static int count(void){
@@ -76,6 +80,19 @@ static void genExpr(Node *Nd) {
       printf("  # 将a0的值，写入到a1中存放的地址\n");
       printf("    sd a0, 0(a1)\n");
       return;
+    case ND_FUNCALL: {
+      int NArgs = 0;
+      for (Node *Arg = Nd->Args; Arg; Arg = Arg->Next) {
+        genExpr(Arg);
+        push();
+        NArgs++;
+      }
+      for (int i = NArgs - 1; i >= 0; i--)
+        pop(ArgReg[i]);
+      printf("  # 调用%s函数\n", Nd->FuncName);
+      printf("  call %s\n", Nd->FuncName);
+      return;
+    }
     default:
       break;
   }
@@ -196,8 +213,8 @@ static void genStmt(Node *Nd){
     printf("# 返回语句\n");
     genExpr(Nd->LHS);
 
-    printf("  # 跳转到.L.return段\n");
-    printf("  j .L.return\n");
+    printf("  # 跳转到.L.return.%s段\n", CurrentFn->Name);
+    printf("  j .L.return.%s\n", CurrentFn->Name);
     return ;
     
   // 生成表达式语句
@@ -212,52 +229,69 @@ static void genStmt(Node *Nd){
 }
 
 static void assignLVarOffsets(Function *Prog){
-  int Offset = 0;
-  for(Obj *Var = Prog->Locals; Var; Var = Var->Next){
-    Offset += 8;
-    Var->Offset = -Offset;
+  for (Function *Fn = Prog; Fn; Fn = Fn->Next) {
+    int Offset = 0;
+    for (Obj *Var = Fn->Locals; Var; Var = Var->Next) {
+      Offset += 8;
+      Var->Offset = -Offset;
+    }
+    Fn->StackSize = alignTo(Offset, 16);
   }
-  Prog->StackSize = alignTo(Offset, 16);
 }
 
 void codegen(Function *Prog){
   assignLVarOffsets(Prog);
-    printf("    .globl main\n");
-    printf("\n# =====程序开始===============\n");
-    printf("# main段标签，也是程序入口段\n");
-    printf("main:\n");
+  for (Function *Fn = Prog; Fn; Fn = Fn->Next) {
+    printf("\n  # 定义全局%s段\n", Fn->Name);
+    printf("  .globl %s\n", Fn->Name);
+    printf("# =====%s段开始===============\n", Fn->Name);
+    printf("# %s段标签\n", Fn->Name);
+    printf("%s:\n", Fn->Name);
+    CurrentFn = Fn;
 
-  // 栈布局
-  //-------------------------------// sp
-  //              fp
-  //-------------------------------// fp = sp-8
-  //             变量
-  //-------------------------------// sp = sp-8-StackSize
-  //           表达式计算
-  //-------------------------------//
-    
+    // 栈布局
+    //-------------------------------// sp
+    //              ra
+    //-------------------------------// ra = sp-8
+    //              fp
+    //-------------------------------// fp = sp-16
+    //             变量
+    //-------------------------------// sp = sp-16-StackSize
+    //           表达式计算
+    //-------------------------------//
 
     // Prologue, 前言
-    // 将fp压入栈中，保存fp的值
-    printf("  addi sp, sp, -8\n");
+    // 将ra寄存器压栈,保存ra的值
+    printf("  # 将ra寄存器压栈,保存ra的值\n");
+    printf("  addi sp, sp, -16\n");
+    printf("  sd ra, 8(sp)\n");
     printf("  sd fp, 0(sp)\n");
-    printf("  mv fp, sp\n");  // 将sp写入fp
-    printf("  addi sp, sp, -%d\n", Prog->StackSize);// 26个字母*8字节=208字节，栈腾出208字节的空间
+    printf("  mv fp, sp\n");
+    printf("  addi sp, sp, -%d\n", Fn->StackSize);
 
-    printf("\n# =====程序主体===============\n");
-    genStmt(Prog->Body);
+    int I = 0;
+    for (Obj *Var = Fn->Params; Var; Var = Var->Next) {
+      printf("  # 将%s寄存器的值存入%s的栈地址\n", ArgReg[I], Var->Name);
+      printf("  sd %s, %d(fp)\n", ArgReg[I++], Var->Offset);
+    }
+
+    // 生成语句链表的代码
+    printf("# =====%s段主体===============\n", Fn->Name);
+    genStmt(Fn->Body);
     assert(Depth == 0);
 
     // Epilogue，后语
-    // 将fp的值改写回sp
-    printf("\n# =====程序结束===============\n");
+    // 输出return段标签
+    printf("# =====%s段结束===============\n", Fn->Name);
     printf("# return段标签\n");
-    printf(".L.return: \n");
+    printf(".L.return.%s:\n", Fn->Name);
+    printf("  # 将fp的值写回sp\n");
     printf("  mv sp, fp\n");
-    // 将最早fp保存的值弹栈，恢复fp。
     printf("  ld fp, 0(sp)\n");
-    printf("  addi sp, sp, 8\n");
+    printf("  ld ra, 8(sp)\n");
+    printf("  addi sp, sp, 16\n");
     // 返回
     printf("  # 返回a0值给系统调用\n");
-    printf("    ret\n");
+    printf("  ret\n");
+  }
 }

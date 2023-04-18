@@ -3,6 +3,7 @@
 // Input string
 static char *CurrentInput;
 
+
 //================ error System ===================
 void error(char *Fmt,...){
     va_list VA;
@@ -83,7 +84,7 @@ static int readPunct(char *Ptr) {
 }
 
 static bool isKeyword(Token *Tok){
-    static char *Kw[] = {"return", "if", "else", "for","while"};
+    static char *Kw[] = {"return", "if", "else", "for","while","int"};
 
     for(int I = 0; I <sizeof(Kw) / sizeof(*Kw); ++I){
         if(equal(Tok, Kw[I]))

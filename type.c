@@ -4,11 +4,26 @@ Type *TyInt = &(Type){TY_INT};
 
 bool isInteger(Type *Ty){ return Ty->Kind == TY_INT; }
 
+
+Type *copyType(Type *Ty) {
+  Type *Ret = calloc(1, sizeof(Type));
+  *Ret = *Ty;
+  return Ret;
+}
+
+
 Type *pointerTo(Type *Base){
     Type *Ty = calloc(1, sizeof(Type));
     Ty->Kind = TY_PTR;
     Ty->Base = Base;
     return Ty;
+}
+
+Type *funcType(Type *ReturnTy) {
+  Type *Ty = calloc(1, sizeof(Type));
+  Ty->Kind = TY_FUNC;
+  Ty->ReturnTy = ReturnTy;
+  return Ty;
 }
 
 void addType(Node *Nd){
@@ -42,6 +57,7 @@ void addType(Node *Nd){
     case ND_LT:
     case ND_LE:
     case ND_NUM:
+    case ND_FUNCALL:
         Nd->Ty = TyInt;
         return ;
     case ND_VAR:

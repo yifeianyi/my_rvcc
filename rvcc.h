@@ -64,6 +64,10 @@ struct Obj{
 
 typedef struct Function Function;
 struct Function{
+  Function *Next;
+  char *Name;
+  Obj *Params;
+
   Node *Body;
   Obj *Locals;
   int StackSize;
@@ -89,6 +93,7 @@ typedef enum {
   ND_IF,        // "if"，条件判断
   ND_FOR,       // "for" or "while"
   ND_BLOCK,     // { ... }, code block
+  ND_FUNCALL,
   ND_EXPR_STMT, // Expr
   ND_VAR,       // var
   ND_NUM, 
@@ -112,9 +117,14 @@ struct Node {
   Node *Init; 
   Node *Inc;  
 
+  // func_Call
+  char *FuncName;
+  Node *Args;
+
 
   // code block
   Node *Body;  
+
   Obj *Var; 
   int Val;       
 };
@@ -126,20 +136,27 @@ Function *parse(Token *Tok);
 typedef enum{
   TY_INT,  // int 
   TY_PTR,  // pointer
+  TY_FUNC,
 }TypeKind;
 
 struct Type{
   TypeKind Kind;
   Type *Base;     // 指向的类型
   Token *Name;
+
+  // Func type
+  Type *ReturnTy;
+  Type *Params;
+  Type *Next;  
 };
 
 extern Type *TyInt;
 
 bool isInteger(Type *TY);
+Type *copyType(Type *Ty);
 Type *pointerTo(Type *Base);
 void addType(Node *Nd);
-
+Type *funcType(Type *ReturnTy);
 
 //
 // 语义分析与代码生成
